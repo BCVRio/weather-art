@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Climate Art</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body { background: #000; overflow: hidden; font-family: 'Georgia', serif; }
+
+canvas { display: block; position: fixed; inset: 0; }
+
+#overlay {
+  position: fixed; inset: 0; pointer-events: none;
+  display: flex; flex-direction: column;
+  justify-content: space-between;
+}
+
+/* ── Top bar ── */
+#top {
+  display: flex;
+  justify-content: center;
+  padding: 28px 0 0;
+  pointer-events: all;
+}
+
+#search-wrap {
+  display: flex;
+  gap: 0;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#city-input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  padding: 10px 18px;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  outline: none;
+  width: 200px;
+}
+#city-input::placeholder { color: rgba(255,255,255,0.25); }
+
+#search-btn {
+  background: rgba(255,255,255,0.08);
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  padding: 10px 18px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#search-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+#status {
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  padding: 10px 0 0;
+  min-height: 24px;
+  pointer-events: none;
+}
+
+/* ── Year slider ── */
+#year-bar {
+  pointer-events: all;
+  padding: 0 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+#year-label {
+  font-size: 72px;
+  font-weight: 100;
+  letter-spacing: 0.15em;
+  color: rgba(255,255,255,0.08);
+  line-height: 1;
+  text-align: center;
+  font-family: 'Georgia', serif;
+  transition: color 0.4s;
+}
+
+#year-label.active { color: rgba(255,255,255,0.18); }
+
+#year-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 600px;
+}
+
+#year-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+  outline: none;
+  cursor: pointer;
+}
+#year-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#year-range::-webkit-slider-thumb:hover { background: #fff; }
+
+.year-end {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.25);
+  min-width: 36px;
+}
+.year-end:last-child { text-align: right; }
+
+#delta-label {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  min-height: 18px;
+}
+
+/* ── Bottom info ── */
+#bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 32px 28px;
+}
+
+#city-name {
+  font-size: 20px;
+  font-weight: normal;
+  letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.7);
+}
+
+#condition {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.35);
+  margin-top: 4px;
+}
+
+#metrics {
+  display: flex;
+  gap: 28px;
+  text-align: right;
+}
+.metric { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.mv {
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.8);
+  transition: color 0.5s;
+}
+.ml { font-size: 10px; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); }
+.mv.hot { color: #ff7040; }
+.mv.cold { color: #70c8ff; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="overlay">
+  <div>
+    <div id="top">
+      <div>
+        <div id="search-wrap">
+          <input id="city-input" type="text" placeholder="Enter city..." value="New York" />
+          <button id="search-btn" onclick="searchCity()">RENDER</button>
+        </div>
+        <div id="status"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="year-bar">
+    <div id="year-label">2025</div>
+    <div id="year-row">
+      <span class="year-end">2025</span>
+      <input id="year-range" type="range" min="2025" max="2100" value="2025" step="1" />
+      <span class="year-end">2100</span>
+    </div>
+    <div id="delta-label"></div>
+  </div>
+
+  <div id="bottom">
+    <div>
+      <div id="city-name">—</div>
+      <div id="condition">—</div>
+    </div>
+    <div id="metrics">
+      <div class="metric"><span class="mv" id="temp-val">—</span><span class="ml">TEMP °C</span></div>
+      <div class="metric"><span class="mv" id="wind-val">—</span><span class="ml">WIND km/h</span></div>
+      <div class="metric"><span class="mv" id="humid-val">—</span><span class="ml">HUMIDITY %</span></div>
+      <div class="metric"><span class="mv" id="cloud-val">—</span><span class="ml">CLOUD %</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Canvas setup
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+const BASE_YEAR = 2025;
+let selectedYear = BASE_YEAR;
+let currentLat = 40.71, currentLon = -74.01;
+
+let weather = {
+  temp: 12, wind: 15, windDir: 220,
+  humidity: 65, clouds: 50, precip: 0,
+};
+
+// Climate delta per decade (°C warming, applied from 2025)
+// Rough IPCC SSP2-4.5 scenario
+const TEMP_DELTA_PER_YEAR = 0.034; // ~3.4°C per century
+
+function projectedTemp(baseTemp, year) {
+  const delta = (year - BASE_YEAR) * TEMP_DELTA_PER_YEAR;
+  return baseTemp + delta;
+}
+
+function projectedWind(baseWind, year) {
+  // Slight intensification
+  return baseWind * (1 + (year - BASE_YEAR) * 0.001);
+}
+
+function projectedPrecip(basePrecip, year) {
+  // More extreme: wetter wet, drier dry
+  return basePrecip * (1 + (year - BASE_YEAR) * 0.004);
+}
+
+// ─────────────────────────────────────────────
+// Noise (simplex-ish using sine stacking)
+// ─────────────────────────────────────────────
+function noise(x, y, t) {
+  return (
+    Math.sin(x * 1.3 + t * 0.7) * Math.cos(y * 1.1 - t * 0.5) * 0.5 +
+    Math.sin(x * 2.7 - t * 1.1 + y * 0.9) * 0.25 +
+    Math.cos(x * 0.6 + y * 2.1 + t * 0.3) * 0.15 +
+    Math.sin(x * 4.1 - y * 3.2 + t * 1.7) * 0.1
+  );
+}
+
+// ─────────────────────────────────────────────
+// Visual params derived from weather + year
+// ─────────────────────────────────────────────
+function getVisuals() {
+  const temp = projectedTemp(weather.temp, selectedYear);
+  const wind = projectedWind(weather.wind, selectedYear);
+  const precip = projectedPrecip(weather.precip, selectedYear);
+  const yearProgress = (selectedYear - BASE_YEAR) / 75; // 0..1
+
+  // Hue: arctic blue (200) → temperate green (120) → hot amber (30) → scorched red (0/360)
+  const tempNorm = Math.max(0, Math.min(1, (temp + 10) / 55));
+  const hue = 210 - tempNorm * 210;
+
+  // Saturation rises with climate intensity
+  const sat = 40 + tempNorm * 50 + yearProgress * 20;
+
+  // Chaos: driven by wind + year
+  const chaos = Math.min(1, wind / 60 + yearProgress * 0.4);
+
+  // Rain intensity
+  const rainInt = Math.min(1, precip / 8);
+
+  // Speed of animation
+  const speed = 0.4 + wind / 80 + yearProgress * 0.6;
+
+  return { temp, wind, precip, tempNorm, hue, sat, chaos, rainInt, speed, yearProgress };
+}
+
+// ─────────────────────────────────────────────
+// Draw layers
+// ─────────────────────────────────────────────
+let t = 0;
+
+// Offscreen blob canvas for performance
+const blobCanvas = document.createElement('canvas');
+const bCtx = blobCanvas.getContext('2d');
+
+function drawBackground(v) {
+  const g = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.6, Math.max(W, H));
+  const l0 = 6 + v.tempNorm * 6 + v.yearProgress * 4;
+  g.addColorStop(0,   `hsla(${v.hue}, ${v.sat}%, ${l0 + 4}%, 1)`);
+  g.addColorStop(0.5, `hsla(${v.hue + 20}, ${v.sat - 10}%, ${l0}%, 1)`);
+  g.addColorStop(1,   `hsla(${v.hue + 40}, ${v.sat - 20}%, 2%, 1)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// Warp grid — the core abstract element
+function drawWarpField(v) {
+  const cols = 32, rows = 20;
+  const cw = W / cols, ch = H / rows;
+
+  ctx.lineWidth = 0.6 + v.chaos * 1.2;
+
+  for (let r = 0; r < rows; r++) {
+    ctx.beginPath();
+    for (let c = 0; c <= cols; c++) {
+      const bx = c * cw;
+      const by = r * ch;
+      const nx = noise(c * 0.18, r * 0.22, t * v.speed) * v.chaos * 80;
+      const ny = noise(c * 0.22, r * 0.18, t * v.speed + 5) * v.chaos * 60;
+      const px = bx + nx;
+      const py = by + ny;
+      const alpha = 0.04 + v.chaos * 0.08 + Math.sin(c * 0.4 + t) * 0.02;
+      const hShift = v.hue + c * 2;
+      ctx.strokeStyle = `hsla(${hShift}, ${v.sat + 20}%, 70%, ${alpha})`;
+      if (c === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  for (let c = 0; c < cols; c++) {
+    ctx.beginPath();
+    for (let r = 0; r <= rows; r++) {
+      const bx = c * cw;
+      const by = r * ch;
+      const nx = noise(c * 0.18, r * 0.22, t * v.speed + 10) * v.chaos * 80;
+      const ny = noise(c * 0.22, r * 0.18, t * v.speed + 15) * v.chaos * 60;
+      const px = bx + nx;
+      const py = by + ny;
+      const alpha = 0.03 + v.chaos * 0.06;
+      ctx.strokeStyle = `hsla(${v.hue - c}, ${v.sat}%, 65%, ${alpha})`;
+      if (r === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+}
+
+// Plasma blobs
+function drawBlobs(v) {
+  const count = 6 + Math.floor(v.yearProgress * 4);
+  for (let i = 0; i < count; i++) {
+    const phase = (i / count) * Math.PI * 2;
+    const px = W * (0.2 + 0.6 * ((Math.sin(t * v.speed * 0.3 + phase) + 1) / 2));
+    const py = H * (0.15 + 0.7 * ((Math.cos(t * v.speed * 0.2 + phase * 1.3) + 1) / 2));
+    const r = 80 + 180 * v.chaos + Math.sin(t * v.speed + i) * 60;
+    const hue = (v.hue + i * 35 + t * 2) % 360;
+    const alpha = 0.025 + v.yearProgress * 0.02;
+
+    const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+    g.addColorStop(0, `hsla(${hue}, ${v.sat + 30}%, 70%, ${alpha * 2})`);
+    g.addColorStop(0.5, `hsla(${hue + 30}, ${v.sat}%, 50%, ${alpha})`);
+    g.addColorStop(1, `hsla(${hue + 60}, ${v.sat - 20}%, 30%, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Fluid streaks — wind-driven
+function drawStreaks(v) {
+  if (v.wind < 5) return;
+  const windRad = (weather.windDir * Math.PI) / 180;
+  const count = Math.floor(12 + v.chaos * 24);
+
+  for (let i = 0; i < count; i++) {
+    const seedX = ((i * 137.5) % 1) * W;
+    const seedY = ((i * 97.3) % 1) * H;
+    const ox = noise(seedX * 0.005, seedY * 0.005, t * v.speed * 0.5 + i) * W * 0.3;
+    const oy = noise(seedX * 0.005 + 5, seedY * 0.005, t * v.speed * 0.5 + i) * H * 0.2;
+
+    const x1 = (seedX + ox) % W;
+    const y1 = (seedY + oy) % H;
+    const len = 40 + v.chaos * 120 + Math.sin(t + i) * 30;
+    const x2 = x1 + Math.sin(windRad + noise(x1 * 0.01, y1 * 0.01, t) * v.chaos * 2) * len;
+    const y2 = y1 + Math.cos(windRad + noise(x1 * 0.01 + 3, y1 * 0.01, t) * v.chaos * 2) * len * 0.5;
+
+    const alpha = 0.04 + v.chaos * 0.06;
+    const hue = (v.hue + i * 8) % 360;
+    const g = ctx.createLinearGradient(x1, y1, x2, y2);
+    g.addColorStop(0, `hsla(${hue}, ${v.sat + 20}%, 75%, ${alpha})`);
+    g.addColorStop(1, `hsla(${hue}, ${v.sat}%, 60%, 0)`);
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 0.5 + v.chaos * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+
+    // Bezier curve with noise perturbation
+    const mx = (x1 + x2) / 2 + noise(x1 * 0.008, t * 0.3 + i, 0) * 60 * v.chaos;
+    const my = (y1 + y2) / 2 + noise(y1 * 0.008, t * 0.3 + i, 3) * 40 * v.chaos;
+    ctx.quadraticCurveTo(mx, my, x2, y2);
+    ctx.stroke();
+  }
+}
+
+// Rain
+const drops = Array.from({ length: 300 }, () => ({
+  x: Math.random(), y: Math.random(), len: 0.5 + Math.random(), spd: 0.6 + Math.random() * 0.8
+}));
+
+function drawRain(v) {
+  if (v.rainInt < 0.05) return;
+  const windRad = (weather.windDir * Math.PI) / 180;
+  const lean = Math.sin(windRad) * v.wind * 0.2 * v.rainInt;
+
+  ctx.strokeStyle = `rgba(160, 200, 255, ${v.rainInt * 0.3})`;
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  drops.forEach(d => {
+    d.y += d.spd * v.rainInt * 0.012;
+    d.x += lean * 0.0008;
+    if (d.y > 1) { d.y = -0.05; d.x = Math.random(); }
+    if (d.x > 1) d.x -= 1;
+    if (d.x < 0) d.x += 1;
+    ctx.moveTo(d.x * W, d.y * H);
+    ctx.lineTo(d.x * W + lean * 0.4, d.y * H + d.len * 20 * v.rainInt);
+  });
+  ctx.stroke();
+}
+
+// Vignette
+function drawVignette(v) {
+  const intensity = 0.6 + v.yearProgress * 0.25;
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, Math.max(W, H) * 0.8);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, `rgba(0,0,0,${intensity})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// Heat shimmer — future years
+function drawShimmer(v) {
+  if (v.yearProgress < 0.2 || v.tempNorm < 0.5) return;
+  const strength = (v.yearProgress - 0.2) * v.tempNorm * 0.8;
+  const bands = 8;
+  for (let i = 0; i < bands; i++) {
+    const y = (i / bands) * H + Math.sin(t * 2 + i) * 10;
+    const alpha = strength * 0.04;
+    ctx.fillStyle = `hsla(${v.hue + 20}, 80%, 80%, ${alpha})`;
+    ctx.fillRect(0, y, W, 2 + strength * 4);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Animation loop
+// ─────────────────────────────────────────────
+function loop() {
+  t += 0.008;
+  ctx.clearRect(0, 0, W, H);
+
+  const v = getVisuals();
+
+  drawBackground(v);
+  drawBlobs(v);
+  drawWarpField(v);
+  drawStreaks(v);
+  drawShimmer(v);
+  drawRain(v);
+  drawVignette(v);
+
+  requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────
+// UI updates
+// ─────────────────────────────────────────────
+function updateUI() {
+  const temp = projectedTemp(weather.temp, selectedYear);
+  const wind = projectedWind(weather.wind, selectedYear);
+  const delta = temp - weather.temp;
+
+  document.getElementById('year-label').textContent = selectedYear;
+  document.getElementById('year-label').classList.toggle('active', selectedYear > BASE_YEAR);
+
+  const deltaStr = delta > 0.05
+    ? `+${delta.toFixed(1)}°C projected warming`
+    : 'baseline — current conditions';
+  document.getElementById('delta-label').textContent = deltaStr;
+
+  const tv = document.getElementById('temp-val');
+  tv.textContent = Math.round(temp);
+  tv.className = 'mv' + (temp > 30 ? ' hot' : temp < 5 ? ' cold' : '');
+
+  document.getElementById('wind-val').textContent = Math.round(wind);
+  document.getElementById('humid-val').textContent = weather.humidity;
+  document.getElementById('cloud-val').textContent = weather.clouds;
+}
+
+// ─────────────────────────────────────────────
+// Year slider
+// ─────────────────────────────────────────────
+document.getElementById('year-range').addEventListener('input', e => {
+  selectedYear = parseInt(e.target.value);
+  updateUI();
+});
+
+// ─────────────────────────────────────────────
+// Weather fetch
+// ─────────────────────────────────────────────
+const WMO = {
+  0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+  45:'Foggy',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',
+  61:'Slight rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',
+  80:'Showers',81:'Rain showers',82:'Violent showers',95:'Thunderstorm',99:'Thunderstorm'
+};
+
+async function geocode(city) {
+  const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`);
+  const d = await r.json();
+  if (!d.results?.length) throw new Error('not found');
+  return d.results[0];
+}
+
+async function fetchWeather(lat, lon) {
+  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,weather_code&wind_speed_unit=kmh`);
+  return r.json();
+}
+
+function setStatus(msg, fade = false) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  if (fade) setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+async function loadCity(cityName) {
+  setStatus('reading atmosphere...');
+  try {
+    const geo = await geocode(cityName);
+    const data = await fetchWeather(geo.latitude, geo.longitude);
+    const c = data.current;
+
+    currentLat = geo.latitude;
+    currentLon = geo.longitude;
+
+    weather.temp     = c.temperature_2m;
+    weather.humidity = c.relative_humidity_2m;
+    weather.precip   = c.precipitation;
+    weather.clouds   = c.cloud_cover;
+    weather.wind     = c.wind_speed_10m;
+    weather.windDir  = c.wind_direction_10m;
+
+    document.getElementById('city-name').textContent =
+      geo.name + (geo.country ? `, ${geo.country}` : '');
+    document.getElementById('condition').textContent =
+      WMO[c.weather_code] || 'Unknown';
+
+    updateUI();
+    setStatus('');
+  } catch {
+    setStatus('city not found', true);
+  }
+}
+
+function searchCity() {
+  const v = document.getElementById('city-input').value.trim();
+  if (v) loadCity(v);
+}
+
+document.getElementById('city-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchCity();
+});
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+loop();
+loadCity('New York');
+</script>
+</body>
+</html>
